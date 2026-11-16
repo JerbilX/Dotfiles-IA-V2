@@ -1,0 +1,20 @@
+# Temporales y Scratch
+scratch/
+*.tmp
+*.log
+
+# Archivos de Sistema Operativo
+.DS_Store
+Thumbs.db
+*~
+
+# Entornos y Dependencias Locales
+.venv/
+venv/
+node_modules/
+
+# Configuración de IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
