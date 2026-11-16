@@ -23,7 +23,7 @@ cmd_link() {
     echo "[✓] Enlazado AGENTS.md en ${CONFIG_DIR}/AGENTS.md"
     echo "[✓] hooks.json eliminado de ${CONFIG_DIR}/hooks.json (cero hooks punitivos)"
 
-    for skill in adr-manager project-documentation smokinggun; do
+    for skill in adr-manager project-documentation smokinggun issue-driven-workflow; do
         if [ -d "${SKILLS_SRC}/${skill}" ]; then
             ln -sfn "${SKILLS_SRC}/${skill}" "${SKILLS_DST}/${skill}"
             echo "[✓] Skill enlazada en host: ${skill}"
