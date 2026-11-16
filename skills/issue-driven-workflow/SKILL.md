@@ -17,6 +17,8 @@ Protocolo operativo canónico para desarrollo guiado por **GitHub Issues** y **P
 3. **Trazabilidad Mandatoria (Issue ➔ Branch ➔ PR):** Ningún cambio de código de producción se inicia sin un issue que justifique el requerimiento. Todo PR debe enlazar explícitamente el cierre del issue (`Closes #<id>`).
 4. **Minimal Blast Radius (MBR):** Cada rama y PR debe contener el cambio mínimo necesario para satisfacer los criterios de aceptación del issue. Prohibido mezclar refactorizaciones accesorias o cambios de formato no relacionados.
 5. **Independencia de Tableros:** El flujo opera de forma autónoma con cualquier repositorio estándar de GitHub mediante Issues y PRs. La interacción con tableros (GitHub Projects v2) es puramente opcional y no bloqueante.
+6. **Ejecución en Runtime y Bypass de Red:** Las operaciones puramente locales (`git checkout`, `git add`, `git commit`, `git status`, `git branch`) deben ejecutarse en sandbox estándar (`BypassSandbox: false`). Por el contrario, los comandos con conectividad hacia `api.github.com` (`gh auth`, `gh issue`, `gh pr`, `gh repo`) o remotos de Git (`git push`, `git pull`, `git fetch`) dependen intrínsecamente de red externa y **deben invocarse directamente con elevación de red (`BypassSandbox: true`)** en Google Antigravity. Se prohíbe el primer intento ciego en sandbox aislado para estas operaciones, evitando fallos espurios de autenticación (HTTP 401) y reintentos reactivos innecesarios.
+
 
 ---
 
@@ -26,7 +28,7 @@ Protocolo operativo canónico para desarrollo guiado por **GitHub Issues** y **P
   - Tareas de solo lectura, análisis de arquitectura, spikes en `scratch/` o respuestas a preguntas.
   - **Acción:** No se crean ramas ni PRs. Si responde a un issue informativo, se comenta directamente:
     ```bash
-    gh issue comment <id> --body "Dictamen técnico: ..."
+    gh issue comment <id> --body "Dictamen técnico: ..."  # BypassSandbox: true
     ```
 * **Nivel 1 (N1 - Correcciones Acotadas / Tareas Menores):**
   - Errores evidentes, ajustes de configuración menores o fixes con solución directa y sin ambigüedad arquitectónica.
@@ -44,16 +46,17 @@ Protocolo operativo canónico para desarrollo guiado por **GitHub Issues** y **P
 ```
 
 ### Fase 1: Ingesta del Issue
-1. Inspeccionar el issue:
+1. Inspeccionar el issue (requiere red):
    ```bash
-   gh issue view <id>
+   gh issue view <id>  # BypassSandbox: true
    ```
 2. **Auditoría Crítica:** Contrastar los requisitos contra el código de producción y ADRs vigentes (`docs/adr/`). Si el issue contiene premisas erróneas, fallas de diseño o deuda técnica no advertida, emitir dictamen técnico antes de implementar.
 
 ### Fase 2: Aislamiento en Rama Efímera
-1. Actualizar la rama base:
+1. Actualizar la rama base mediante invocaciones atómicas independientes:
    ```bash
-   git checkout main && git pull --ff-only
+   git checkout main
+   git pull --ff-only  # BypassSandbox: true
    ```
 2. Crear y cambiar a la rama efímera:
    ```bash
@@ -62,7 +65,7 @@ Protocolo operativo canónico para desarrollo guiado por **GitHub Issues** y **P
 
 ### Fase 3: Implementación y Verificación Local
 1. Implementar exclusivamente lo requerido por el issue respetando contratos existentes.
-2. Ejecutar pruebas automatizadas o validaciones de compilación/linting locales (`./build.sh`, tests unitarios).
+2. Ejecutar pruebas automatizadas o validaciones de compilación/linting locales (`./build.sh`, tests unitarios) en sandbox estándar.
 
 ### Fase 4: Commit Convencional Atómico
 1. Staging explícito de archivos afectados (evitar `git add .` indiscriminado):
@@ -76,27 +79,27 @@ Protocolo operativo canónico para desarrollo guiado por **GitHub Issues** y **P
    *Tipos estándar:* `feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `chore:`.
 
 ### Fase 5: Publicación y Pull Request
-1. Publicar la rama en el remoto:
+1. Publicar la rama en el remoto (requiere red):
    ```bash
-   git push -u origin <nombre-de-rama>
+   git push -u origin <nombre-de-rama>  # BypassSandbox: true
    ```
-2. Abrir el Pull Request vinculando el issue de forma determinista:
+2. Abrir el Pull Request vinculando el issue de forma determinista (requiere red):
    ```bash
    gh pr create --title "<tipo>(<alcance>): <descripción>" --body "## Resumen
    <Explicación técnica de la solución implementada>
 
-   Closes #<id>"
+   Closes #<id>"  # BypassSandbox: true
    ```
 
 ### Fase 6: Cierre, Merge e Higiene Local
-1. Una vez aprobado o tras la orden explícita del usuario, fusionar vía squash eliminando la rama remota:
+1. Una vez aprobado o tras la orden explícita del usuario, fusionar vía squash eliminando la rama remota (requiere red):
    ```bash
-   gh pr merge <id> --squash --delete-branch
+   gh pr merge <id> --squash --delete-branch  # BypassSandbox: true
    ```
-2. Retornar a `main`, sincronizar cambios y podar la rama local:
+2. Retornar a `main`, sincronizar cambios y podar la rama local mediante comandos atómicos:
    ```bash
    git checkout main
-   git pull --prune
+   git pull --prune  # BypassSandbox: true
    git branch -d <nombre-de-rama>
    ```
 
@@ -107,13 +110,13 @@ Protocolo operativo canónico para desarrollo guiado por **GitHub Issues** y **P
 Para registrar bugs detectados, deudas técnicas o futuras tareas directamente en GitHub Issues:
 
 ```bash
-gh issue create --title "<tipo>(<alcance>): <descripción>" --body "<cuerpo con contexto, reproducción y criterios de aceptación>"
+gh issue create --title "<tipo>(<alcance>): <descripción>" --body "<cuerpo con contexto, reproducción y criterios de aceptación>"  # BypassSandbox: true
 ```
 
 Para listar tareas pendientes en el repositorio:
 
 ```bash
-gh issue list --state open --limit 10
+gh issue list --state open --limit 10  # BypassSandbox: true
 ```
 
 ---
@@ -123,5 +126,5 @@ gh issue list --state open --limit 10
 Al inicializar y publicar nuevos repositorios en GitHub, priorizar visibilidad pública (`--public`) para disponer de minutos ilimitados en runners de GitHub Actions (CI/CD):
 
 ```bash
-gh repo create <nombre> --public --source=. --remote=origin --push
+gh repo create <nombre> --public --source=. --remote=origin --push  # BypassSandbox: true
 ```
