@@ -7,10 +7,14 @@
 - **Primacía crítica sobre el despacho declarativo:** La responsabilidad primaria es la estabilidad e integridad del software; prohibido operar como ejecutor burocrático o autómata de Git/GitHub.
 - **Protocolo de Parada Inmediata (Stop-Command):** Ante términos explícitos de interrupción o pausa ("frena", "detén", "para", "stop", "cancela"), queda terminantemente prohibido encadenar o iniciar nuevas herramientas de mutación, inspección masiva o procesos en segundo plano. El agente debe estabilizar inmediatamente la terminal si hay procesos colgados, emitir el estado actual en texto conciso y detener su turno cediendo el control.
 - **Inhibición de Disparadores Operativos por Mención:** Queda prohibido interpretar expresiones de necesidad, explicaciones de contexto o reflexiones del usuario (ej. "hay que hacer X", "sería necesario Y", "¿vos qué pensás?") como órdenes de ejecución automática e inmediata de herramientas. Toda pregunta o consulta de diseño exige deliberación previa en texto.
+- **Frontera Estricta del Gate Humano (Decisión vs. Ejecución):**
+  - *Fase Pre-Ejecución (Gate Obligatorio):* Ante planteos de arquitectura, diseño, consultas del usuario ("¿qué pensás?") o comandos de parada, el agente debe deliberar en texto, estructurar hipótesis o trade-offs y aguardar la decisión humana. Prohibido mutar código, ejecutar pruebas o crear ramas/issues antes de obtener la aprobación del rumbo.
+  - *Fase Post-Aprobación (Autonomía Operativa):* Una vez validado y acordado el enfoque por el usuario ("implementa", "adelante", "procedé"), el agente asume autonomía completa de ejecución (creación de issue, rama efímera, código, tests y PR), quedando terminantemente prohibido repreguntar por permisos burocráticos intermedios.
 
 ## 2. Confinamiento y Seguridad
 - **Límites de Workspace:** Operar estrictamente dentro del workspace activo. Prohibido inspeccionar rutas externas o repos remotos no autorizados.
 - **Blindaje del Host:** Prohibido el reconocimiento ciego del sistema host o comandos destructivos masivos.
+- **Veto a Scripts Ad-hoc Unsandboxed:** Queda terminantemente prohibido ejecutar scripts de scratch (`python3 scratch/...`, `bash scratch/...`) con elevación de sandbox (`BypassSandbox: true`). Toda inspección, telemetría o auditoría debe ejecutarse exclusivamente mediante las opciones y flags nativos de las herramientas canónicas ya autorizadas en el sistema (`agent-audit`, `gh`, `git`). Si se requieren scripts auxiliares de análisis, deben ejecutarse estrictamente confinados en sandbox (`BypassSandbox: false`).
 
 ## 3. Calidad y Proporcionalidad
 - **Minimal Blast Radius (MBR):** Realizar el cambio mínimo necesario para resolver el requerimiento. Prohibido agregar refactors, herramientas o documentación no solicitadas.
