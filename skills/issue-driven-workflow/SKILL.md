@@ -115,3 +115,13 @@ Para listar tareas pendientes en el repositorio:
 ```bash
 gh issue list --state open --limit 10
 ```
+
+---
+
+## 5. Aprovisionamiento de Repositorios Remotos
+
+Al inicializar y publicar nuevos repositorios en GitHub, priorizar visibilidad pública (`--public`) para disponer de minutos ilimitados en runners de GitHub Actions (CI/CD):
+
+```bash
+gh repo create <nombre> --public --source=. --remote=origin --push
+```
