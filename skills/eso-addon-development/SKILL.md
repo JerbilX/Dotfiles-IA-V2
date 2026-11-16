@@ -215,3 +215,33 @@ end
    - Si se requiere polling o animación, verificar delta time (`GetFrameTimeSeconds()`) y actualizar en intervalos mínimos (ej. cada 100 ms), nunca en cada fotograma sin control.
 3. **Localización de Strings:**
    - Registrar identificadores de texto mediante `ZO_CreateStringId("SI_MIADDON_TEXTO", "Valor")` para facilitar soporte multilingüe.
+
+---
+
+## 8. Integración de Herramientas MCP (`eso-mcp-server`)
+
+Para disponer de consulta de APIs, esquemas de eventos, catálogo de constantes y validación estática contra la API oficial de EsoUI sin contaminar otros repositorios no relacionados, la integración se configura **exclusivamente a nivel de workspace** en cada proyecto de addon:
+
+### Configuración en el Addon (`.agents/mcp_config.json`)
+Crear el archivo `.agents/mcp_config.json` en la raíz del repositorio del addon (ej. `ESORPQuestAddon/.agents/mcp_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "eso-mcp-server": {
+      "command": "/home/jerbilx/Proyectos-IA-V3/eso-mcp-server/.venv/bin/python",
+      "args": ["-m", "eso_mcp.server"]
+    }
+  }
+}
+```
+
+### Herramientas Disponibles en la Sesión
+Una vez abierto el proyecto del addon, Antigravity expone las siguientes herramientas:
+- `eso_search_api(query)`: Búsqueda rápida de funciones de la API oficial de EsoUI.
+- `eso_get_event_info(event_name)`: Firma, parámetros y código del evento en el motor.
+- `eso_get_constant_info(constant_name)`: Valor y documentación de constantes globales.
+- `eso_lint_code(code)`: Análisis estático de Lua contra APIs de EsoUI.
+- `eso_lint_xml(xml_content)`: Auditoría estática de controles y layouts XML `GuiXml`.
+- `eso_validate_addon(addon_path)`: Validación integral de archivos del addon.
+- `eso_init_project_references()`: Inicializa referencias canónicas en el workspace del addon.
