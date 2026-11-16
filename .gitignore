@@ -16,5 +16,7 @@ node_modules/
 # Configuración de IDEs
 .idea/
 .vscode/
-*.swp
-*.swo
+# Python Cache
+__pycache__/
+*.pyc
+*.pyo

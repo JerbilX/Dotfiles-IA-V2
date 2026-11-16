@@ -144,6 +144,11 @@ SCENE_MANAGER:GetScene("hud"):AddFragment(fragment)
 SCENE_MANAGER:GetScene("hudui"):AddFragment(fragment)
 ```
 
+### Gestión Canónica de Pines en EsoUI (`ZO_WorldMap_AddCustomPin`)
+- **Registro Único:** Registrar estrictamente un único tipo de pin canónico por funcionalidad. Prohibido registrar múltiples identificadores (ej. nuevo y legacy) que apunten al mismo callback de creación de pines, ya que el motor duplica llamadas y EsoUI apila los textos en un tooltip compuesto (*pin clustering*).
+- **Idempotencia y Reciclaje:** El callback `pinTypeAddPinCallback` debe limpiar o regenerar deterministamente los pines activos de acuerdo al mapa visible (`ZO_WorldMap_GetPinManager():CreatePin`), validando que la capa cartográfica actual coincida con la coordenada de la zona o el submapa correspondiente.
+- **Separación Mapa vs. Brújula:** La brújula debe alimentarse de las coordenadas resueltas del mapa únicamente cuando este sea estable. Las correcciones angulares con `GetPlayerCameraHeading()` deben considerar el sentido de rotación angular del motor para evitar inversión de movimiento al rotar la cámara.
+
 ---
 
 ## 5. Hooks, Eventos y Comandos de Barra

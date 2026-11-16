@@ -20,6 +20,7 @@ Este repositorio centraliza las directivas de comportamiento, reglas de arquitec
   - `smokinggun`: Análisis de cuellos de botella y complejidad algorítmica.
   - `issue-driven-workflow`: Flujo E2E guiado por GitHub Issues y PRs.
   - `eso-addon-development`: Desarrollo de addons para Elder Scrolls Online (Lua / ESO API).
+  - `conversation-audit`: Auditoría determinista, análisis de latencias y detección de antipatrones en sesiones (`agent-audit`).
 - `build.sh`: Script de compilación y enlace simbólico hacia `~/.gemini/config`.
 
 ---
