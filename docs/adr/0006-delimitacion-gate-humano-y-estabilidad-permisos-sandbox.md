@@ -3,7 +3,7 @@ status: accepted
 date: 2026-11-16
 decision-makers: [JerbilX, Antigravity]
 supersedes: []
-superseded-by: []
+superseded-by: [0008]
 ---
 
 # 0006 - Delimitación del Gate Humano y Estabilidad de Permisos en Sandbox

@@ -18,7 +18,7 @@ Protocolo operativo canónico para desarrollo guiado por **GitHub Issues** y **P
 4. **Minimal Blast Radius (MBR):** Cada rama y PR debe contener el cambio mínimo necesario para satisfacer los criterios de aceptación del issue. Prohibido mezclar refactorizaciones accesorias o cambios de formato no relacionados.
 5. **Independencia de Tableros:** El flujo opera de forma autónoma con cualquier repositorio estándar de GitHub mediante Issues y PRs. La interacción con tableros (GitHub Projects v2) es puramente opcional y no bloqueante.
 6. **Ejecución en Runtime y Bypass de Red:** Las operaciones puramente locales (`git checkout`, `git add`, `git commit`, `git status`, `git branch`) deben ejecutarse en sandbox estándar (`BypassSandbox: false`). Por el contrario, los comandos con conectividad hacia `api.github.com` (`gh auth`, `gh issue`, `gh pr`, `gh repo`) o remotos de Git (`git push`, `git pull`, `git fetch`) dependen intrínsecamente de red externa y **deben invocarse directamente con elevación de red (`BypassSandbox: true`)** en Google Antigravity. Se prohíbe el primer intento ciego en sandbox aislado para estas operaciones, evitando fallos espurios de autenticación (HTTP 401) y reintentos reactivos innecesarios.
-
+7. **Estabilidad de Permisos y Uso Mandatorio de `--body-file` (Veto Universal a `-b`/`--body`):** Queda terminantemente prohibido el paso de cuerpos o comentarios en línea mediante `-b`, `--body`, `-c`, `--comment` en cualquier comando de `gh`. Todo contenido textual debe volcarse a un archivo temporal bajo `scratch/` (ej. `scratch/issue_body.md`, `scratch/comment_body.md`, `scratch/pr_body.md`) y consumirse exclusivamente con `--body-file <ruta>` (o `-F <ruta>`) para garantizar firmas CLI deterministas y auto-aprobables por el sandbox.
 
 ---
 
@@ -26,9 +26,9 @@ Protocolo operativo canónico para desarrollo guiado por **GitHub Issues** y **P
 
 * **Nivel 0 (N0 - Consultas / Spikes / Auditorías):**
   - Tareas de solo lectura, análisis de arquitectura, spikes en `scratch/` o respuestas a preguntas.
-  - **Acción:** No se crean ramas ni PRs. Si responde a un issue informativo, se comenta directamente:
+  - **Acción:** No se crean ramas ni PRs. Si responde a un issue informativo, se escribe el dictamen en archivo temporal y se comenta con `--body-file`:
     ```bash
-    gh issue comment <id> --body "Dictamen técnico: ..."  # BypassSandbox: true
+    gh issue comment <id> --body-file scratch/comment_body.md  # BypassSandbox: true
     ```
 * **Nivel 1 (N1 - Correcciones Acotadas / Tareas Menores):**
   - Errores evidentes, ajustes de configuración menores o fixes con solución directa y sin ambigüedad arquitectónica.
@@ -83,12 +83,9 @@ Protocolo operativo canónico para desarrollo guiado por **GitHub Issues** y **P
    ```bash
    git push -u origin <nombre-de-rama>  # BypassSandbox: true
    ```
-2. Abrir el Pull Request vinculando el issue de forma determinista (requiere red):
+2. Abrir el Pull Request vinculando el issue de forma determinista (escribir descripción en `scratch/pr_body.md` y referenciar vía `--body-file`, requiere red):
    ```bash
-   gh pr create --title "<tipo>(<alcance>): <descripción>" --body "## Resumen
-   <Explicación técnica de la solución implementada>
-
-   Closes #<id>"  # BypassSandbox: true
+   gh pr create --title "<tipo>(<alcance>): <descripción>" --body-file scratch/pr_body.md  # BypassSandbox: true
    ```
 
 ### Fase 6: Cierre, Merge e Higiene Local
@@ -107,10 +104,10 @@ Protocolo operativo canónico para desarrollo guiado por **GitHub Issues** y **P
 
 ## 4. Gestión Rápida de Backlog
 
-Para registrar bugs detectados, deudas técnicas o futuras tareas directamente en GitHub Issues:
+Para registrar bugs detectados, deudas técnicas o futuras tareas directamente en GitHub Issues (escribir el cuerpo en `scratch/issue_body.md` y referenciar vía `--body-file`):
 
 ```bash
-gh issue create --title "<tipo>(<alcance>): <descripción>" --body "<cuerpo con contexto, reproducción y criterios de aceptación>"  # BypassSandbox: true
+gh issue create --title "<tipo>(<alcance>): <descripción>" --body-file scratch/issue_body.md  # BypassSandbox: true
 ```
 
 Para listar tareas pendientes en el repositorio:
