@@ -65,7 +65,7 @@ Protocolo operativo canónico para desarrollo guiado por **GitHub Issues** y **P
 
 ### Fase 3: Implementación y Verificación Local
 1. Implementar exclusivamente lo requerido por el issue respetando contratos existentes.
-2. Ejecutar pruebas automatizadas o validaciones de compilación/linting locales (`./build.sh`, tests unitarios) en sandbox estándar.
+2. Ejecutar pruebas automatizadas o validaciones de compilación/linting locales (`./build.sh build`, tests unitarios) en sandbox estándar.
 
 ### Fase 4: Commit Convencional Atómico
 1. Staging explícito de archivos afectados (evitar `git add .` indiscriminado):

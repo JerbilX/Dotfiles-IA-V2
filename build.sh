@@ -17,7 +17,11 @@ cmd_build() {
 
 cmd_link() {
     cmd_build
-    mkdir -p "${CONFIG_DIR}" "${SKILLS_DST}"
+    if ! mkdir -p "${CONFIG_DIR}" "${SKILLS_DST}" 2>/dev/null || [ ! -w "${CONFIG_DIR}" ]; then
+        echo "[✗] Error: '${CONFIG_DIR}' no es escribible o el sistema de archivos es de solo lectura (sandbox)." >&2
+        echo "    El subcomando 'link' despliega en el host y debe ejecutarse fuera del entorno de sandbox." >&2
+        exit 1
+    fi
     ln -sf "${DIST_DIR}/AGENTS.md" "${CONFIG_DIR}/AGENTS.md"
     rm -f "${CONFIG_DIR}/hooks.json"
     echo "[✓] Enlazado AGENTS.md en ${CONFIG_DIR}/AGENTS.md"
@@ -31,7 +35,7 @@ cmd_link() {
     done
 }
 
-case "${1:-link}" in
+case "${1:-build}" in
     build) cmd_build ;;
     link)  cmd_link ;;
     *)     echo "Uso: $0 {build|link}"; exit 1 ;;
