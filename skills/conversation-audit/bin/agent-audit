@@ -1,0 +1,429 @@
+#!/usr/bin/env python3
+"""
+CLI determinista agent-audit para auditoría de rendimiento y sesiones de agentes IA.
+Soporta Antigravity y Claude Code en Python 3 estándar (sin dependencias externas).
+"""
+
+import argparse
+import sys
+from pathlib import Path
+
+# Inyección de scripts/ al PYTHONPATH de forma agnóstica al symlink
+current_file = Path(__file__).resolve()
+skill_root = current_file.parent.parent
+scripts_path = skill_root / "scripts"
+if str(scripts_path) not in sys.path:
+    sys.path.insert(0, str(scripts_path))
+
+try:
+    from adapters import get_adapter
+    from audit_engine import (
+        AuditEngine,
+        aggregate_rules_violations,
+        discover_session_files,
+        filter_steps_by_tool,
+        format_json_failed_steps,
+        format_json_metadata,
+        format_json_report,
+        format_json_rules_report,
+        format_json_step,
+        format_json_steps,
+        format_markdown_failed_steps,
+        format_markdown_metadata,
+        format_markdown_report,
+        format_markdown_rules_report,
+        format_markdown_step,
+        format_markdown_steps,
+        format_text_failed_steps,
+        format_text_metadata,
+        format_text_report,
+        format_text_rules_report,
+        format_text_step,
+        format_text_steps,
+        get_failed_steps,
+        parse_step_ranges,
+    )
+except ImportError as e:
+    sys.stderr.write(f"Error al cargar dependencias internas de agent-audit: {e}\n")
+    sys.exit(1)
+
+
+def parse_arguments() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="agent-audit",
+        description="Auditoría de rendimiento, análisis de latencias y detección de antipatrones en sesiones de agentes IA.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "target",
+        nargs="?",
+        default=None,
+        help="Ruta al archivo de transcripción (transcript.jsonl, sesión .json), directorio brain, o ID de conversación.",
+    )
+    parser.add_argument(
+        "--rules",
+        action="store_true",
+        help="Genera informe consolidado de violaciones por ID de regla basal (para ciclo de mejora continua #282/#285).",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Atajo para --format json.",
+    )
+    parser.add_argument(
+        "--runtime",
+        choices=["auto", "antigravity", "claude"],
+        default="auto",
+        help="Runtime a auditar. 'auto' detecta automáticamente el formato (predeterminado).",
+    )
+    parser.add_argument(
+        "--format",
+        choices=["text", "markdown", "json"],
+        default="text",
+        help="Formato de salida del informe (predeterminado: 'text').",
+    )
+    parser.add_argument(
+        "--output",
+        "-o",
+        type=Path,
+        default=None,
+        help="Ruta opcional donde guardar el informe generado en lugar de imprimirlo en stdout.",
+    )
+    parser.add_argument(
+        "--threshold-latency",
+        type=float,
+        default=60.0,
+        help="Umbral de latencia en segundos para alertar pasos lentos (predeterminado: 60.0s).",
+    )
+    parser.add_argument(
+        "--threshold-file-lines",
+        type=int,
+        default=200,
+        help="Umbral de líneas para alertar lecturas masivas de archivos (predeterminado: 200).",
+    )
+    parser.add_argument(
+        "--fail-on-antipattern",
+        action="store_true",
+        help="Retorna código de salida 2 si se detecta al menos un antipatrón de severidad CRÍTICA o ALTA.",
+    )
+    inspect_group = parser.add_mutually_exclusive_group()
+    inspect_group.add_argument(
+        "--metadata-only",
+        action="store_true",
+        help="Consulta rápida de metadatos de sesión (ID, título, runtime, fechas) sin procesar el árbol completo de pasos.",
+    )
+    inspect_group.add_argument(
+        "--inspect-step",
+        type=str,
+        metavar="N",
+        default=None,
+        help="Muestra el contenido detallado de un paso específico (ej. 5) o rango/lista.",
+    )
+    inspect_group.add_argument(
+        "--inspect-steps",
+        type=str,
+        metavar="RANGES",
+        default=None,
+        help="Muestra el contenido detallado de rangos o listas de pasos (ej. '87-105', '87..105', '1-5,87-90,105').",
+    )
+    inspect_group.add_argument(
+        "--failed-steps",
+        action="store_true",
+        help="Lista exclusivamente los pasos que arrojaron errores o excepciones en herramientas.",
+    )
+    parser.add_argument(
+        "--filter-tool",
+        type=str,
+        metavar="TOOL",
+        default=None,
+        help="Filtra pasos para incluir únicamente aquellos que invoquen la herramienta especificada (ej. 'run_command', 'replace_file_content').",
+    )
+    parser.add_argument(
+        "--verbose",
+        "-v",
+        action="store_true",
+        help="Muestra información extendida y trazas de depuración.",
+    )
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_arguments()
+    if args.json:
+        args.format = "json"
+
+    if args.rules:
+        target_path = Path(args.target) if args.target else Path.cwd()
+        engine = AuditEngine(
+            latency_threshold_seconds=args.threshold_latency,
+            file_lines_threshold=args.threshold_file_lines,
+        )
+
+        discovered = discover_session_files(target_path, runtime_hint=args.runtime)
+        if not discovered:
+            # Probar resolución directa si target_path es un ID o archivo directo
+            try:
+                ad = get_adapter(target_path, runtime_hint=args.runtime)
+                discovered = [(ad, target_path)]
+            except Exception:
+                sys.stderr.write(
+                    f"Error: No se encontraron transcripciones o sesiones válidas en: {target_path}\n"
+                )
+                return 1
+
+        reports = []
+        for adapter, p in discovered:
+            try:
+                steps = adapter.parse(p)
+                metadata = adapter.extract_metadata(p, steps)
+                report = engine.analyze(metadata, steps)
+                reports.append(report)
+            except Exception as e:
+                if args.verbose:
+                    sys.stderr.write(f"Advertencia: Error al auditar sesión '{p}': {e}\n")
+
+        if not reports:
+            sys.stderr.write(
+                f"Error: Ninguna sesión pudo ser analizada exitosamente en: {target_path}\n"
+            )
+            return 1
+
+        rules_report = aggregate_rules_violations(reports)
+
+        if args.format == "json":
+            output_content = format_json_rules_report(rules_report)
+        elif args.format == "markdown":
+            output_content = format_markdown_rules_report(rules_report)
+        else:
+            output_content = format_text_rules_report(rules_report)
+
+        if args.output:
+            try:
+                args.output.parent.mkdir(parents=True, exist_ok=True)
+                with open(args.output, "w", encoding="utf-8") as f:
+                    f.write(output_content)
+                    if not output_content.endswith("\n"):
+                        f.write("\n")
+                print(f"Informe de violaciones de reglas guardado exitosamente en: {args.output}")
+            except Exception as e:
+                sys.stderr.write(f"Error al escribir informe en '{args.output}': {e}\n")
+                return 1
+        else:
+            print(output_content)
+
+        if args.fail_on_antipattern:
+            if rules_report.total_violations > 0:
+                return 2
+        return 0
+
+    if not args.target:
+        sys.stderr.write("Error: El argumento 'target' es obligatorio cuando no se utiliza --rules.\n")
+        return 1
+
+    target_path = Path(args.target)
+
+    try:
+        adapter = get_adapter(target_path, runtime_hint=args.runtime)
+    except Exception as e:
+        sys.stderr.write(f"Error resolviendo adaptador de runtime: {e}\n")
+        return 1
+
+    if args.metadata_only:
+        try:
+            metadata = adapter.fast_extract_metadata(target_path)
+        except FileNotFoundError as e:
+            sys.stderr.write(f"Error: {e}\n")
+            return 1
+        except Exception as e:
+            sys.stderr.write(f"Error extrayendo metadatos de sesión: {e}\n")
+            if args.verbose:
+                import traceback
+                traceback.print_exc()
+            return 1
+
+        if args.format == "json":
+            output_content = format_json_metadata(metadata)
+        elif args.format == "markdown":
+            output_content = format_markdown_metadata(metadata)
+        else:
+            output_content = format_text_metadata(metadata)
+
+        if args.output:
+            try:
+                args.output.parent.mkdir(parents=True, exist_ok=True)
+                with open(args.output, "w", encoding="utf-8") as f:
+                    f.write(output_content)
+                    if not output_content.endswith("\n"):
+                        f.write("\n")
+                print(f"Metadatos de sesión guardados exitosamente en: {args.output}")
+            except Exception as e:
+                sys.stderr.write(f"Error al escribir metadatos en '{args.output}': {e}\n")
+                return 1
+        else:
+            print(output_content)
+        return 0
+
+    try:
+        steps = adapter.parse(target_path)
+    except FileNotFoundError as e:
+        sys.stderr.write(f"Error: {e}\n")
+        return 1
+    except Exception as e:
+        sys.stderr.write(f"Error inesperado al parsear transcripción: {e}\n")
+        if args.verbose:
+            import traceback
+            traceback.print_exc()
+        return 1
+
+    if not steps:
+        sys.stderr.write(f"Advertencia: No se encontraron pasos válidos en la transcripción: {target_path}\n")
+
+    step_spec = args.inspect_steps if args.inspect_steps is not None else args.inspect_step
+
+    if step_spec is not None:
+        try:
+            target_indices = parse_step_ranges(str(step_spec))
+        except ValueError as e:
+            sys.stderr.write(f"Error en parámetro de inspección de pasos: {e}\n")
+            return 1
+
+        if len(target_indices) == 1:
+            single_idx = target_indices[0]
+            target_steps = [s for s in steps if s.step_index == single_idx]
+            if not target_steps:
+                sys.stderr.write(f"Error: No se encontró el paso {single_idx} en la transcripción: {target_path}\n")
+                return 1
+        else:
+            target_steps = [s for s in steps if s.step_index in target_indices]
+            if not target_steps:
+                sys.stderr.write(f"Error: No se encontraron los pasos especificados en la transcripción: {target_path}\n")
+                return 1
+
+        if args.filter_tool:
+            target_steps = filter_steps_by_tool(target_steps, args.filter_tool)
+            if not target_steps:
+                sys.stderr.write(
+                    f"Error: Ningún paso coincidió con el filtro de herramienta '{args.filter_tool}' en los pasos seleccionados: {target_path}\n"
+                )
+                return 1
+
+        is_single = (len(target_steps) == 1 and args.inspect_steps is None and len(target_indices) == 1)
+
+        if args.format == "json":
+            output_content = format_json_step(target_steps[0]) if is_single else format_json_steps(target_steps)
+        elif args.format == "markdown":
+            output_content = format_markdown_step(target_steps[0]) if is_single else format_markdown_steps(target_steps)
+        else:
+            output_content = format_text_step(target_steps[0]) if is_single else format_text_steps(target_steps)
+
+        msg_type = "Detalle de paso" if is_single else "Detalle de pasos"
+        if args.output:
+            try:
+                args.output.parent.mkdir(parents=True, exist_ok=True)
+                with open(args.output, "w", encoding="utf-8") as f:
+                    f.write(output_content)
+                    if not output_content.endswith("\n"):
+                        f.write("\n")
+                print(f"{msg_type} guardado exitosamente en: {args.output}")
+            except Exception as e:
+                sys.stderr.write(f"Error al escribir {msg_type.lower()} en '{args.output}': {e}\n")
+                return 1
+        else:
+            print(output_content)
+        return 0
+
+    if args.failed_steps:
+        failed = get_failed_steps(steps)
+        if args.filter_tool:
+            failed = filter_steps_by_tool(failed, args.filter_tool)
+
+        if args.format == "json":
+            output_content = format_json_failed_steps(failed)
+        elif args.format == "markdown":
+            output_content = format_markdown_failed_steps(failed)
+        else:
+            output_content = format_text_failed_steps(failed)
+
+        if args.output:
+            try:
+                args.output.parent.mkdir(parents=True, exist_ok=True)
+                with open(args.output, "w", encoding="utf-8") as f:
+                    f.write(output_content)
+                    if not output_content.endswith("\n"):
+                        f.write("\n")
+                print(f"Listado de pasos con errores guardado exitosamente en: {args.output}")
+            except Exception as e:
+                sys.stderr.write(f"Error al escribir pasos con errores en '{args.output}': {e}\n")
+                return 1
+        else:
+            print(output_content)
+        return 0
+
+    if args.filter_tool:
+        target_steps = filter_steps_by_tool(steps, args.filter_tool)
+        if not target_steps:
+            sys.stderr.write(
+                f"Error: No se encontraron pasos con llamadas a la herramienta '{args.filter_tool}' en la transcripción: {target_path}\n"
+            )
+            return 1
+
+        if args.format == "json":
+            output_content = format_json_steps(target_steps)
+        elif args.format == "markdown":
+            output_content = format_markdown_steps(target_steps)
+        else:
+            output_content = format_text_steps(target_steps)
+
+        if args.output:
+            try:
+                args.output.parent.mkdir(parents=True, exist_ok=True)
+                with open(args.output, "w", encoding="utf-8") as f:
+                    f.write(output_content)
+                    if not output_content.endswith("\n"):
+                        f.write("\n")
+                print(f"Pasos filtrados guardados exitosamente en: {args.output}")
+            except Exception as e:
+                sys.stderr.write(f"Error al escribir pasos filtrados en '{args.output}': {e}\n")
+                return 1
+        else:
+            print(output_content)
+        return 0
+
+    metadata = adapter.extract_metadata(target_path, steps)
+    engine = AuditEngine(
+        latency_threshold_seconds=args.threshold_latency,
+        file_lines_threshold=args.threshold_file_lines,
+    )
+    report = engine.analyze(metadata, steps)
+
+    if args.format == "json":
+        output_content = format_json_report(report)
+    elif args.format == "markdown":
+        output_content = format_markdown_report(report)
+    else:
+        output_content = format_text_report(report, verbose=args.verbose)
+
+    if args.output:
+        try:
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            with open(args.output, "w", encoding="utf-8") as f:
+                f.write(output_content)
+                if not output_content.endswith("\n"):
+                    f.write("\n")
+            print(f"Informe de auditoría guardado exitosamente en: {args.output}")
+        except Exception as e:
+            sys.stderr.write(f"Error al escribir informe en '{args.output}': {e}\n")
+            return 1
+    else:
+        print(output_content)
+
+    if args.fail_on_antipattern:
+        has_critical = any(ap.severity in ("CRÍTICA", "ALTA") for ap in report.antipatterns)
+        if has_critical:
+            return 2
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

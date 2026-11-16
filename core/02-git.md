@@ -9,3 +9,7 @@
 - Cero intermediarios: no se exigen wrappers propietarios locales para operar con GitHub.
 - **Acceso Directo a Red (Bypass de Sandbox):** Las operaciones que interactúan con la API de GitHub (`gh auth`, `gh issue`, `gh pr`, etc.) y con remotos de Git (`git push`, `git pull`, `git fetch`) poseen una dependencia intrínseca de red externa. En entornos con aislamiento de sandbox (como Google Antigravity), deben invocarse directamente con elevación de red (`BypassSandbox: true`), exceptuándolas de la heurística de prueba ciega en sandbox aislado para evitar fallos espurios de autenticación (HTTP 401) y consumo innecesario de tokens.
 
+## 3. Autonomía en Creación de Issues
+- **Autonomía en Creación de Issues:** La creación de issues en GitHub para planificar, registrar tareas, deconstrucciones o fases acordadas es una operación estándar, autónoma y de mínimo impacto destructivo.
+- **Prohibición de Gates Redundantes:** Queda terminantemente prohibido solicitar confirmación humana interactiva (`ask_question`, Stop & Ask) para crear un issue en el repositorio activo o en repositorios de trabajo autorizados cuando el trabajo técnico o fase ya ha sido identificado o acordado. Los issues registran trazabilidad y no alteran código de producción.
+
